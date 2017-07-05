@@ -1,0 +1,106 @@
+<?php
+
+namespace Drupal\accountkit;
+
+use Drupal\Core\Config\ConfigFactoryInterface;
+
+/**
+ * Contains all Account Kit related logic.
+ */
+class AccountKitManager {
+
+  private $configFactory;
+
+  public function __construct(ConfigFactoryInterface $configFactory) {
+    $this->configFactory = $configFactory;
+  }
+
+
+
+  public function getAccessToken() {
+    // Initialize variables
+    $app_id = $this->getAppId();
+    $secret = $this->getAppSecret();
+    $version = $this->getApiVersion();
+
+    $code = \Drupal::request()->get('code');
+
+    // Exchange authorization code for access token
+    $token_exchange_url = 'https://graph.accountkit.com/' . $version . '/access_token?' .
+      'grant_type=authorization_code' .
+      '&code=' . $code .
+      "&access_token=AA|$app_id|$secret";
+
+    $data = $this->curlit($token_exchange_url);
+
+    return $data['access_token'];
+  }
+
+  /**
+   * Get user information like email or phone.
+   *
+   * @return array
+   *   Array containing user info.
+   */
+  public function getUserInfo() {
+    $access_token = $this->getAccessToken();
+    if (!empty($access_token)) {
+      // Get Account Kit information
+      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getApiVersion() . '/me?' .
+        'access_token=' . $access_token;
+      $data = $this->curlit($me_endpoint_url);
+    }
+
+    return $data;
+  }
+
+
+  public function curlit($url) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+    $data = json_decode(curl_exec($ch), TRUE);
+    curl_close($ch);
+    return $data;
+  }
+
+  /**
+   * Returns app_id from module settings.
+   *
+   * @return string
+   *   Application ID defined in module settings.
+   */
+  public function getAppId() {
+    $app_id = $this->configFactory
+      ->get('accountkit.settings')
+      ->get('app_id');
+    return $app_id;
+  }
+
+  /**
+   * Returns app_secret from module settings.
+   *
+   * @return string
+   *   Application secret defined in module settings.
+   */
+  public function getAppSecret() {
+    $app_secret = $this->configFactory
+      ->get('accountkit.settings')
+      ->get('app_secret');
+    return $app_secret;
+  }
+
+  /**
+   * Returns api_version from module settings.
+   *
+   * @return string
+   *   API version defined in module settings.
+   */
+  public function getApiVersion() {
+    $api_version = $this->configFactory
+      ->get('accountkit.settings')
+      ->get('api_version');
+    return $api_version;
+  }
+
+}

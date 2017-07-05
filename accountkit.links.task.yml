@@ -1,0 +1,4 @@
+accountkit.accountkit_login:
+  route_name: accountkit.accountkit_login
+  base_route: user.page
+  title: 'Account Kit login'

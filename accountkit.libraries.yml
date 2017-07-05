@@ -1,0 +1,7 @@
+sdk:
+  js:
+    https://sdk.accountkit.com/en_US/sdk.js: { type: external }
+
+client:
+  js:
+    js/client.js: {}
