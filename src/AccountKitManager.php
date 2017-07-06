@@ -103,4 +103,17 @@ class AccountKitManager {
     return $api_version;
   }
 
+  /**
+   * Returns redirect url from module settings.
+   *
+   * @return string
+   *   Redirect url defined in module settings.
+   */
+  public function getRedirectUrl() {
+    $api_version = $this->configFactory
+      ->get('accountkit.settings')
+      ->get('redirect_url');
+    return $api_version;
+  }
+
 }

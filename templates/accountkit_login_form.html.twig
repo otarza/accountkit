@@ -8,7 +8,7 @@
 <button onclick="emailLogin();">Login via Email</button>
 
 
-<form id="login_success" method="post" action="/user/accountkit">
+<form id="login_success" method="post" action="{{ redirect_url }}">
     <input id="csrf" type="hidden" name="csrf" />
     <input id="code" type="hidden" name="code" />
 </form>

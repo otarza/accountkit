@@ -46,20 +46,21 @@ class AccountKitController extends ControllerBase {
   public function login() {
     $markup = [
       '#theme' => 'accountkit_login_form',
-      '#attached' => array(
-        'library' => array(
+      '#attached' => [
+        'library' => [
           'accountkit/sdk',
           'accountkit/client',
-        ),
+        ],
         'drupalSettings' => [
           'accountkit' => [
             'client' => [
               'app_id' => $this->accountKitManager->getAppId(),
               'api_version' => $this->accountKitManager->getApiVersion(),
-            ]
-          ]
+            ],
+          ],
         ],
-      ),
+      ],
+      '#redirect_url' => $this->accountKitManager->getRedirectUrl(),
     ];
 
     return $markup;
