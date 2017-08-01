@@ -2,7 +2,7 @@
 accountkit.accountkit_login:
   path: '/user/accountkit'
   defaults:
-    _controller: '\Drupal\accountkit\Controller\AccountKitController::login'
+    _form: '\Drupal\accountkit\Form\AccountKitLoginForm'
     _title: 'Account Kit login'
   requirements:
     _permission: 'access content'

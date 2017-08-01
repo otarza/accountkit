@@ -11,6 +11,13 @@ AccountKit_OnInteractive = function () {
   );
 };
 
+
+document.getElementById("edit-sms-login").addEventListener("click", function (e) {
+  e.preventDefault()
+  smsLogin();
+  return false;
+});
+
 // login callback
 function loginCallback(response) {
   console.log("loginCallback");
@@ -56,3 +63,6 @@ function emailLogin() {
     loginCallback
   );
 }
+
+
+

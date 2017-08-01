@@ -9,14 +9,14 @@
  * Implements hook_theme().
  */
 function accountkit_theme() {
-  $theme['accountkit_login_form'] = [
-    'template' => 'accountkit_login_form',
-    'render element' => 'html',
-    'variables' => [
-      'redirect_url' => NULL,
-    ],
-  ];
+//  $theme['accountkit_login_form'] = [
+//    'template' => 'accountkit_login_form',
+//    'render element' => 'html',
+//    'variables' => [
+//      'redirect_url' => NULL,
+//    ],
+//  ];
 
 
-  return $theme;
+  return [];
 }
