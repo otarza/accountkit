@@ -5,3 +5,5 @@ sdk:
 client:
   js:
     js/client.js: {}
+  dependencies:
+    - core/drupalSettings

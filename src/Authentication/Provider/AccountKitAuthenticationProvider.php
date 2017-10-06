@@ -54,28 +54,37 @@ class AccountKitAuthenticationProvider implements AuthenticationProviderInterfac
    */
   public function authenticate(Request $request) {
     $user = NULL;
+    $user_name = NULL;
     $data = $this->accountKitManager->getUserInfo();
+
     if (!empty($data['email']['address'])) {
-      $user = user_load_by_mail($data['email']['address']);
-      if ($user) {
-        drupal_set_message("You are now logged in as " . $user->getDisplayName(), "success");
-      }
-      else {
-        $user = User::create();
-        $user->setPassword('password');
-        $user->enforceIsNew();
-        $user->setEmail($data['email']['address']);
-        $user->setUsername($data['email']['address']);
-        $user->activate();
-        $user->save();
-
-        drupal_set_message("User successfully created!", "success");
-        drupal_set_message("You are now logged in as " . $user->getDisplayName(), "success");
-      }
-
-      user_login_finalize($user);
-
+      $user_name = $data['email']['address'];
+      $user = user_load_by_name($user_name);
     }
+
+    if (!empty($data['phone']['number'])) {
+      $user_name = $data['phone']['number'];
+      $user = user_load_by_name($user_name);
+    }
+
+    if ($user) {
+      drupal_set_message("You are now logged in as " . $user->getDisplayName(), "status");
+    }
+    else {
+      $user = User::create();
+      $user->enforceIsNew();
+      $user->setUsername($user_name);
+      $user->activate();
+      if(!empty($data['email']['address'])){
+        $user->setEmail($user_name);
+      }
+      $user->save();
+
+      drupal_set_message("User successfully created!", "status");
+      drupal_set_message("You are now logged in as " . $user->getDisplayName(), "status");
+    }
+
+    user_login_finalize($user);
 
     return $user;
   }
