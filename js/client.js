@@ -1,3 +1,4 @@
+console.log("Account Kit client loaded");
 // initialize Account Kit with CSRF protection
 AccountKit_OnInteractive = function () {
   AccountKit.init(
@@ -11,16 +12,42 @@ AccountKit_OnInteractive = function () {
   );
 };
 
+if (document.getElementById("sms-login-submit")) {
+  document.getElementById("sms-login-submit").addEventListener("click", function (e) {
+    e.preventDefault()
+    smsLogin();
+    return false;
+  });
+}
+
+if (document.getElementById("email-login-submit")) {
+  document.getElementById("email-login-submit").addEventListener("click", function (e) {
+    e.preventDefault()
+    emailLogin();
+    return false;
+  });
+}
+
 // login callback
 function loginCallback(response) {
   console.log("loginCallback");
   if (response.status === "PARTIALLY_AUTHENTICATED") {
     var code = response.code;
     var csrf = response.state;
+    console.log(code);
+    console.log(csrf);
 
-    document.getElementById("code").value = response.code;
-    document.getElementById("csrf").value = response.state;
-    document.getElementById("login_success").submit();
+    document.getElementById("code").value = code;
+    document.getElementById("csrf").value = csrf;
+
+    if (document.getElementById("sms-login-form")) {
+      document.getElementById("sms-login-form").submit();
+    }
+
+    if (document.getElementById("email-login-form")) {
+      document.getElementById("email-login-form").submit();
+    }
+
     // Send code to server to exchange for access token
   }
   else if (response.status === "NOT_AUTHENTICATED") {
@@ -35,8 +62,8 @@ function loginCallback(response) {
 function smsLogin() {
   console.log("smsLogin");
 
-  var countryCode = document.getElementById("country_code").value;
-  var phoneNumber = document.getElementById("phone_number").value;
+  var countryCode = document.getElementById("edit-country-code").value;
+  var phoneNumber = document.getElementById("edit-phone-number").value;
   AccountKit.login(
     'PHONE',
     {countryCode: countryCode, phoneNumber: phoneNumber}, // will use default values if not specified
@@ -49,10 +76,13 @@ function smsLogin() {
 function emailLogin() {
   console.log("emailLogin");
 
-  var emailAddress = document.getElementById("email").value;
+  var emailAddress = document.getElementById("edit-email").value;
   AccountKit.login(
     'EMAIL',
     {emailAddress: emailAddress},
     loginCallback
   );
 }
+
+
+

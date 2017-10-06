@@ -33,6 +33,14 @@ class AccountKitManager {
 
     $data = $this->curlit($token_exchange_url);
 
+    if(!empty($data['error'])) {
+      drupal_set_message($data['error']['message']
+        . " type: ". $data['error']['type']
+        . " code: " . $data['error']['code']
+        . " fbtrace_id:" . $data['error']['fbtrace_id'],
+        "error");
+    }
+
     return $data['access_token'];
   }
 
@@ -43,6 +51,7 @@ class AccountKitManager {
    *   Array containing user info.
    */
   public function getUserInfo() {
+    $data = NULL;
     $access_token = $this->getAccessToken();
     if (!empty($access_token)) {
       // Get Account Kit information
@@ -114,6 +123,45 @@ class AccountKitManager {
       ->get('accountkit.settings')
       ->get('redirect_url');
     return $api_version;
+  }
+
+  public function getAdditionalFormDetails(){
+    $form = [];
+    $form['code'] = [
+      '#type' => 'hidden',
+      '#title' => t('Code'),
+      '#description' => t('Hidden code field.'),
+      '#attributes' => ['id' => 'code'],
+
+    ];
+    $form['csrf'] = [
+      '#type' => 'hidden',
+      '#title' => t('CSRF'),
+      '#description' => ('Hidden CSRF field.'),
+      '#attributes' => ['id' => 'csrf'],
+    ];
+    $form['submit'] = [
+      '#type' => 'submit',
+      '#value' => t('Submit'),
+    ];
+
+    $form['#attached'] = [
+      'library' => [
+        'accountkit/sdk',
+        'accountkit/client',
+      ],
+      'drupalSettings' => [
+        'accountkit' => [
+          'client' => [
+            'app_id' => $this->getAppId(),
+            'api_version' => $this->getApiVersion(),
+            'redirect_url' => $this->getRedirectUrl(),
+          ],
+        ],
+      ],
+    ];
+
+    return $form;
   }
 
 }

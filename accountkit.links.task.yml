@@ -1,4 +1,9 @@
-accountkit.accountkit_login:
-  route_name: accountkit.accountkit_login
+accountkit.sms_login:
+  route_name: accountkit.sms_login_form
   base_route: user.page
-  title: 'Account Kit login'
+  title: 'Account Kit - SMS Login'
+
+accountkit.email_login:
+  route_name: accountkit.email_login_form
+  base_route: user.page
+  title: 'Account Kit - Email Login'
