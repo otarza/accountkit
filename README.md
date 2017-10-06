@@ -1,10 +1,8 @@
-# Facebook's Account Kit integration for Drupal 8.
-
-NOTE: This module is not complete, it's just in prototype stage. 
-Facebook APP ID and many other values are hardcoded. 
+# Facebook's Account Kit integration for Drupal 8. 
 
 # Usage
 
 1. Install/Enable as regular Drupal module;
-2. Visit `/user/accountkit`;
-3. Authenticate via email.
+2. Configure `/admin/config/people/accountkit`
+3. SMS Login `/user/accountkit/sms-login`
+4. Email Login `/user/accountkit/email-login`;
