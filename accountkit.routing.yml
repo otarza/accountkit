@@ -8,21 +8,11 @@ accountkit.settings_form:
     _permission: 'administer account kit'
 
 
-
-accountkit.sms_login_form:
-  path: '/user/accountkit/sms-login'
+accountkit.login_form:
+  path: '/user/accountkit'
   defaults:
-    _form: '\Drupal\accountkit\Form\SMSLoginForm'
-    _title: 'Account Kit - SMS Login'
+    _form: '\Drupal\accountkit\Form\AccountKitLoginForm'
+    _title: 'Account Kit Login'
   requirements:
-    _access: 'TRUE'
-  
+    _user_is_logged_in: 'FALSE'
 
-accountkit.email_login_form:
-  path: '/user/accountkit/email-login'
-  defaults:
-    _form: '\Drupal\accountkit\Form\EmailLoginForm'
-    _title: 'Account Kit - Email Login'
-  requirements:
-    _access: 'TRUE'
-  

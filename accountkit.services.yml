@@ -1,9 +1,6 @@
 services:
   accountkit.accountkit_manager:
     class: Drupal\accountkit\AccountKitManager
-    arguments: ["@config.factory"]
-#  accountkit.page_cache_request_policy.disallow_access_token_requests:
-#    class: Drupal\accountkit\PageCache\DisallowSimpleOauthRequests
-#    public: false
-#    tags:
-#      - { name: page_cache_request_policy }
+    arguments:
+      - '@config.factory'
+      - '@logger.factory'

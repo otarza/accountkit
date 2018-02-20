@@ -81,17 +81,17 @@ class AccountKitSettingsForm extends ConfigFormBase {
     $form['fb_settings']['app_secret'] = array(
       '#type' => 'textfield',
       '#required' => TRUE,
-      '#title' => $this->t('App Secret'),
+      '#title' => $this->t('Account Kit App Secret'),
       '#default_value' => $accountkit_config->get('app_secret'),
-      '#description' => $this->t('Copy the App Secret of your Facebook App here. This value can be found from your App Dashboard.'),
+      '#description' => $this->t('Copy the Account Kit App Secret of your Facebook App here. This value can be found under Products > Account Kit > Dashboard.'),
     );
 
     $form['fb_settings']['api_version'] = array(
       '#type' => 'textfield',
       '#required' => TRUE,
-      '#title' => $this->t('API Version'),
+      '#title' => $this->t('Account Kit API Version'),
       '#default_value' => $accountkit_config->get('api_version'),
-      '#description' => $this->t('Copy the API Version of your Facebook App here. This value can be found from your App Dashboard. More information on API versions can be found at <a href="@facebook-changelog">Facebook Platform Changelog</a>.', array('@facebook-changelog' => 'https://developers.facebook.com/docs/apps/changelog')),
+      '#description' => $this->t('Copy the Account Kit API Version of your Facebook App here. It may be different than the facebook graph api version.'),
     );
 
 
@@ -114,23 +114,23 @@ class AccountKitSettingsForm extends ConfigFormBase {
     $form['module_settings']['redirect_url'] = array(
       '#type' => 'textfield',
       '#required' => TRUE,
-      '#title' => $this->t('Redirect URL - Used for Basic Web SDK'),
+      '#title' => $this->t('Redirect Path'),
       '#description' => $this->t('Drupal path where the user should be redirected after successful login. Use <em>&lt;front&gt;</em> to redirect user to your front page.'),
       '#default_value' => $accountkit_config->get('redirect_url'),
     );
 
-    $form['module_settings']['disable_phone_auth'] = array(
+    $form['module_settings']['enable_email_auth'] = array(
       '#type' => 'checkbox',
-      '#title' => $this->t('Disable phone authentication'),
-      '#description' => $this->t('Disabling authentication via Email on Account Kit.'),
-      '#default_value' => $accountkit_config->get('disable_phone_auth'),
+      '#title' => $this->t('Enable email authentication'),
+      '#description' => $this->t('Enable authentication via Email on Account Kit.'),
+      '#default_value' => $accountkit_config->get('enable_email_auth'),
     );
 
-    $form['module_settings']['disable_email_auth'] = array(
+    $form['module_settings']['enable_phone_auth'] = array(
       '#type' => 'checkbox',
-      '#title' => $this->t('Disable email authentication'),
-      '#description' => $this->t('Disabling authentication via Phone on Account Kit.'),
-      '#default_value' => $accountkit_config->get('disable_phone_auth'),
+      '#title' => $this->t('Enable phone authentication'),
+      '#description' => $this->t('Enable authentication via Phone on Account Kit.'),
+      '#default_value' => $accountkit_config->get('enable_phone_auth'),
     );
 
     return parent::buildForm($form, $form_state);
@@ -155,8 +155,8 @@ class AccountKitSettingsForm extends ConfigFormBase {
       ->set('app_secret', $values['app_secret'])
       ->set('api_version', $values['api_version'])
       ->set('redirect_url', $values['redirect_url'])
-      ->set('disable_phone_auth', $values['disable_phone_auth'])
-      ->set('disable_email_auth', $values['disable_email_auth'])
+      ->set('enable_email_auth', $values['enable_email_auth'])
+      ->set('enable_phone_auth', $values['enable_phone_auth'])
       ->save();
 
     parent::submitForm($form, $form_state);

@@ -3,27 +3,95 @@
 namespace Drupal\accountkit;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\user\Entity\User;
 
 /**
  * Contains all Account Kit related logic.
  */
 class AccountKitManager {
 
+  /**
+   * @var ConfigFactoryInterface
+   */
   private $configFactory;
 
-  public function __construct(ConfigFactoryInterface $configFactory) {
+  /**
+   * @var \Psr\Log\LoggerInterface
+   */
+  private $logger;
+
+  /**
+   * AccountKitManager constructor.
+   *
+   * @param ConfigFactoryInterface $configFactory
+   *   The config factory to get the account kit config from.
+   * @param LoggerChannelFactoryInterface $loggerChannelFactory
+   *   The logger factory to get the logger for our module.
+   */
+  public function __construct(ConfigFactoryInterface $configFactory, LoggerChannelFactoryInterface $loggerChannelFactory) {
     $this->configFactory = $configFactory;
+    $this->logger = $loggerChannelFactory->get('accountkit');
   }
 
 
+  /**
+   * Log a user in based on the account kit code, create it if necessary.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
+   * @return bool
+   *   Indicates success.
+   */
+  public function userLoginFromCode($code) {
 
-  public function getAccessToken() {
-    // Initialize variables
-    $app_id = $this->getAppId();
-    $secret = $this->getAppSecret();
-    $version = $this->getApiVersion();
+    $data = $this->getUserInfo($code);
 
-    $code = \Drupal::request()->get('code');
+    if (!empty($data['id'])) {
+      // The account kit id will be the username.
+      $user_name = $data['id'];
+      $user = user_load_by_name($user_name);
+    }
+    if ($user) {
+      drupal_set_message("You are now logged in as " . $user->getDisplayName(), "status");
+    }
+    elseif ($user_name) {
+      $user = User::create();
+      $user->enforceIsNew();
+      $user->setUsername($user_name);
+      $user->activate();
+      if(!empty($data['email']['address'])){
+        $user->setEmail($user_name);
+      }
+      $user->save();
+
+      drupal_set_message("You are now logged in as " . $user->getDisplayName(), "status");
+    }
+    if ($user) {
+      user_login_finalize($user);
+
+      return TRUE;
+    }
+
+    return FALSE;
+  }
+
+  /**
+   * Get the Access token for a given code.
+   *
+   * This code is copied from the developer documentation of account kit.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
+   * @return string|null
+   *   The access token.
+   */
+  protected function getAccessToken($code) {
+    $app_id = $this->getConfig('app_id');
+    $secret = $this->getConfig('app_secret');
+    $version = $this->getConfig('api_version');
 
     // Exchange authorization code for access token
     $token_exchange_url = 'https://graph.accountkit.com/' . $version . '/access_token?' .
@@ -34,11 +102,11 @@ class AccountKitManager {
     $data = $this->curlit($token_exchange_url);
 
     if(!empty($data['error'])) {
-      drupal_set_message($data['error']['message']
+      $error = $data['error']['message']
         . " type: ". $data['error']['type']
         . " code: " . $data['error']['code']
-        . " fbtrace_id:" . $data['error']['fbtrace_id'],
-        "error");
+        . " fbtrace_id:" . $data['error']['fbtrace_id'];
+      $this->logger->error($error);
     }
 
     return $data['access_token'];
@@ -47,24 +115,56 @@ class AccountKitManager {
   /**
    * Get user information like email or phone.
    *
+   * This code is copied from the developer documentation of account kit.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
    * @return array
    *   Array containing user info.
    */
-  public function getUserInfo() {
+  protected function getUserInfo($code) {
+    // This code is copied from the developer documentation of account kit.
     $data = NULL;
-    $access_token = $this->getAccessToken();
+    $access_token = $this->getAccessToken($code);
     if (!empty($access_token)) {
       // Get Account Kit information
-      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getApiVersion() . '/me?' .
+      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getConfig('app_secret') . '/me?' .
         'access_token=' . $access_token;
       $data = $this->curlit($me_endpoint_url);
+    }
+    else {
+      $this->logger->error('The access token was empty.');
     }
 
     return $data;
   }
 
+  /**
+   * Get the account kit config.
+   *
+   * @param $key
+   *   The config key.
+   *
+   * @return mixed
+   *   the config.
+   */
+  protected function getConfig($key) {
+    return $this->configFactory->get('accountkit.settings')->get($key);
+  }
 
-  public function curlit($url) {
+  /**
+   * Make a curl request.
+   *
+   * This code is copied from the developer documentation of account kit.
+   *
+   * @param string $url
+   *   The url to curl
+   *
+   * @return mixed
+   *   The result
+   */
+  private function curlit($url) {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
@@ -73,95 +173,6 @@ class AccountKitManager {
     return $data;
   }
 
-  /**
-   * Returns app_id from module settings.
-   *
-   * @return string
-   *   Application ID defined in module settings.
-   */
-  public function getAppId() {
-    $app_id = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('app_id');
-    return $app_id;
-  }
 
-  /**
-   * Returns app_secret from module settings.
-   *
-   * @return string
-   *   Application secret defined in module settings.
-   */
-  public function getAppSecret() {
-    $app_secret = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('app_secret');
-    return $app_secret;
-  }
-
-  /**
-   * Returns api_version from module settings.
-   *
-   * @return string
-   *   API version defined in module settings.
-   */
-  public function getApiVersion() {
-    $api_version = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('api_version');
-    return $api_version;
-  }
-
-  /**
-   * Returns redirect url from module settings.
-   *
-   * @return string
-   *   Redirect url defined in module settings.
-   */
-  public function getRedirectUrl() {
-    $api_version = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('redirect_url');
-    return $api_version;
-  }
-
-  public function getAdditionalFormDetails(){
-    $form = [];
-    $form['code'] = [
-      '#type' => 'hidden',
-      '#title' => t('Code'),
-      '#description' => t('Hidden code field.'),
-      '#attributes' => ['id' => 'code'],
-
-    ];
-    $form['csrf'] = [
-      '#type' => 'hidden',
-      '#title' => t('CSRF'),
-      '#description' => ('Hidden CSRF field.'),
-      '#attributes' => ['id' => 'csrf'],
-    ];
-    $form['submit'] = [
-      '#type' => 'submit',
-      '#value' => t('Submit'),
-    ];
-
-    $form['#attached'] = [
-      'library' => [
-        'accountkit/sdk',
-        'accountkit/client',
-      ],
-      'drupalSettings' => [
-        'accountkit' => [
-          'client' => [
-            'app_id' => $this->getAppId(),
-            'api_version' => $this->getApiVersion(),
-            'redirect_url' => $this->getRedirectUrl(),
-          ],
-        ],
-      ],
-    ];
-
-    return $form;
-  }
 
 }
