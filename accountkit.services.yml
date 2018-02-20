@@ -1,10 +1,4 @@
 services:
-  accountkit.authentication.accountkit:
-    class: Drupal\accountkit\Authentication\Provider\AccountKitAuthenticationProvider
-    arguments: ["@accountkit.accountkit_manager"]
-    tags:
-      - { name: authentication_provider, provider_id: accountkit, global: TRUE, priority: 35 }
-
   accountkit.accountkit_manager:
     class: Drupal\accountkit\AccountKitManager
     arguments: ["@config.factory"]
