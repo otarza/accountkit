@@ -3,6 +3,7 @@
 # Usage
 
 1. Install/Enable as regular Drupal module;
-2. Configure `/admin/config/people/accountkit`
-3. SMS Login `/user/accountkit/sms-login`
-4. Email Login `/user/accountkit/email-login`;
+2. Set up facebook application and add account kit product.
+3. Configure `/admin/config/people/accountkit`
+4. Login `/user/accountkit`
+
