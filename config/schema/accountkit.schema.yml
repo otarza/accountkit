@@ -14,3 +14,9 @@ accountkit.settings:
     redirect_url:
       type: string
       label: 'Redirect url'
+    enable_email_auth:
+      type: boolean
+      label: 'Enable Email auth'
+    enable_phone_auth:
+      type: boolean
+      label: 'Enable Phone auth'

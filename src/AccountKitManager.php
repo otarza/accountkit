@@ -3,27 +3,139 @@
 namespace Drupal\accountkit;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\externalauth\Exception\ExternalAuthRegisterException;
+use Drupal\externalauth\ExternalAuthInterface;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Contains all Account Kit related logic.
  */
 class AccountKitManager {
 
+  /**
+   * @var ConfigFactoryInterface
+   */
   private $configFactory;
 
-  public function __construct(ConfigFactoryInterface $configFactory) {
+  /**
+   * @var \Drupal\externalauth\ExternalAuthInterface
+   */
+  private $externalAuth;
+
+  /**
+   * @var \GuzzleHttp\ClientInterface
+   */
+  private $client;
+
+  /**
+   * @var \Psr\Log\LoggerInterface
+   */
+  private $logger;
+
+  /**
+   * AccountKitManager constructor.
+   *
+   * @param ConfigFactoryInterface $configFactory
+   *   The config factory to get the account kit config from.
+   * @param ExternalAuthInterface $externalAuth
+   *   The authentication service for external authentication methods.
+   * @param \GuzzleHttp\ClientInterface $client
+   *   The http client to make requests to facebook with.
+   * @param LoggerChannelFactoryInterface $loggerChannelFactory
+   *   The logger factory to get the logger for our module.
+   */
+  public function __construct(
+    ConfigFactoryInterface $configFactory,
+    ExternalAuthInterface $externalAuth,
+    ClientInterface $client,
+    LoggerChannelFactoryInterface $loggerChannelFactory
+  ) {
     $this->configFactory = $configFactory;
+    $this->externalAuth = $externalAuth;
+    $this->client = $client;
+    $this->logger = $loggerChannelFactory->get('accountkit');
   }
 
+  /**
+   * Log a user in based on the account kit code, create it if necessary.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
+   * @return \Drupal\user\UserInterface|null
+   *   The user or null if there was a failure.
+   */
+  public function userLoginFromCode($code) {
+    try {
+      $data = $this->getUserInfo($code);
+      $user_name = $data['id'];
+      $account_data = [];
+      if (!empty($data['email']['address'])) {
+        $account_data['mail'] = $data['email']['address'];
+      }
 
+      return $this->externalAuth->loginRegister($user_name, 'accountkit', $account_data);
+    }
+    catch (AccountKitConnectionException $exception) {
+      $data = $exception->getData();
+      $error = "Accountkit error: " . $data['message']
+        . " type: " . $data['type']
+        . " code: " . $data['code']
+        . " fbtrace_id:" . $data['fbtrace_id'];
+      $this->logger->error($error);
+    }
+    catch (GuzzleException $exception) {
+      $this->logger->error('Connection error: ' . $exception->getMessage());
+    }
+    catch (ExternalAuthRegisterException $exception) {
+      $this->logger->error('Registration error: ' . $exception->getMessage());
+    }
 
-  public function getAccessToken() {
-    // Initialize variables
-    $app_id = $this->getAppId();
-    $secret = $this->getAppSecret();
-    $version = $this->getApiVersion();
+    return NULL;
+  }
 
-    $code = \Drupal::request()->get('code');
+  /**
+   * Get user information like email or phone.
+   *
+   * This code is copied from the developer documentation of account kit.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
+   * @return array
+   *   Array containing user info.
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   *   The connection exception.
+   */
+  protected function getUserInfo($code) {
+    // This code is copied from the developer documentation of account kit.
+    $access_token = $this->getAccessToken($code);
+    $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getConfig('api_version') . '/me?access_token=' . $access_token;
+    return $this->curlit($me_endpoint_url);
+  }
+
+  /**
+   * Get the Access token for a given code.
+   *
+   * This code is copied from the developer documentation of account kit.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
+   * @return string
+   *   The access token.
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   *   The connection exception.
+   */
+  protected function getAccessToken($code) {
+    $app_id = $this->getConfig('app_id');
+    $secret = $this->getConfig('app_secret');
+    $version = $this->getConfig('api_version');
 
     // Exchange authorization code for access token
     $token_exchange_url = 'https://graph.accountkit.com/' . $version . '/access_token?' .
@@ -32,136 +144,47 @@ class AccountKitManager {
       "&access_token=AA|$app_id|$secret";
 
     $data = $this->curlit($token_exchange_url);
-
-    if(!empty($data['error'])) {
-      drupal_set_message($data['error']['message']
-        . " type: ". $data['error']['type']
-        . " code: " . $data['error']['code']
-        . " fbtrace_id:" . $data['error']['fbtrace_id'],
-        "error");
-    }
-
     return $data['access_token'];
   }
 
   /**
-   * Get user information like email or phone.
+   * Get the account kit config.
+   *
+   * @param $key
+   *   The config key.
+   *
+   * @return mixed
+   *   the config.
+   */
+  protected function getConfig($key) {
+    return $this->configFactory->get('accountkit.settings')->get($key);
+  }
+
+  /**
+   * Make a curl request.
+   *
+   * @param string $url
+   *   The url to curl
    *
    * @return array
-   *   Array containing user info.
+   *   The result
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   *   The connection exception.
    */
-  public function getUserInfo() {
-    $data = NULL;
-    $access_token = $this->getAccessToken();
-    if (!empty($access_token)) {
-      // Get Account Kit information
-      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getApiVersion() . '/me?' .
-        'access_token=' . $access_token;
-      $data = $this->curlit($me_endpoint_url);
+  protected function curlit($url) {
+    try {
+      $response = $this->client->request('get', $url);
+      return json_decode($response->getBody()->getContents(), TRUE);
     }
-
-    return $data;
-  }
-
-
-  public function curlit($url) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-    $data = json_decode(curl_exec($ch), TRUE);
-    curl_close($ch);
-    return $data;
-  }
-
-  /**
-   * Returns app_id from module settings.
-   *
-   * @return string
-   *   Application ID defined in module settings.
-   */
-  public function getAppId() {
-    $app_id = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('app_id');
-    return $app_id;
-  }
-
-  /**
-   * Returns app_secret from module settings.
-   *
-   * @return string
-   *   Application secret defined in module settings.
-   */
-  public function getAppSecret() {
-    $app_secret = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('app_secret');
-    return $app_secret;
-  }
-
-  /**
-   * Returns api_version from module settings.
-   *
-   * @return string
-   *   API version defined in module settings.
-   */
-  public function getApiVersion() {
-    $api_version = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('api_version');
-    return $api_version;
-  }
-
-  /**
-   * Returns redirect url from module settings.
-   *
-   * @return string
-   *   Redirect url defined in module settings.
-   */
-  public function getRedirectUrl() {
-    $api_version = $this->configFactory
-      ->get('accountkit.settings')
-      ->get('redirect_url');
-    return $api_version;
-  }
-
-  public function getAdditionalFormDetails(){
-    $form = [];
-    $form['code'] = [
-      '#type' => 'hidden',
-      '#title' => t('Code'),
-      '#description' => t('Hidden code field.'),
-      '#attributes' => ['id' => 'code'],
-
-    ];
-    $form['csrf'] = [
-      '#type' => 'hidden',
-      '#title' => t('CSRF'),
-      '#description' => ('Hidden CSRF field.'),
-      '#attributes' => ['id' => 'csrf'],
-    ];
-    $form['submit'] = [
-      '#type' => 'submit',
-      '#value' => t('Submit'),
-    ];
-
-    $form['#attached'] = [
-      'library' => [
-        'accountkit/sdk',
-        'accountkit/client',
-      ],
-      'drupalSettings' => [
-        'accountkit' => [
-          'client' => [
-            'app_id' => $this->getAppId(),
-            'api_version' => $this->getApiVersion(),
-            'redirect_url' => $this->getRedirectUrl(),
-          ],
-        ],
-      ],
-    ];
-
-    return $form;
+    catch (ClientException $exception) {
+      if ($exception->hasResponse()) {
+        $response = $exception->getResponse();
+        $data = json_decode($response->getBody()->getContents(), TRUE);
+        throw new AccountKitConnectionException($exception, $data['error']);
+      }
+      throw $exception;
+    }
   }
 
 }

@@ -30,31 +30,18 @@ if (document.getElementById("email-login-submit")) {
 
 // login callback
 function loginCallback(response) {
-  console.log("loginCallback");
   if (response.status === "PARTIALLY_AUTHENTICATED") {
-    var code = response.code;
-    var csrf = response.state;
-    console.log(code);
-    console.log(csrf);
-
-    document.getElementById("code").value = code;
-    document.getElementById("csrf").value = csrf;
-
-    if (document.getElementById("sms-login-form")) {
-      document.getElementById("sms-login-form").submit();
-    }
-
-    if (document.getElementById("email-login-form")) {
-      document.getElementById("email-login-form").submit();
-    }
-
-    // Send code to server to exchange for access token
+    // Set the code and submit the form.
+    document.getElementById("code").value = response.code;
+    document.getElementById("accountkit-login-form").submit();
   }
   else if (response.status === "NOT_AUTHENTICATED") {
     // handle authentication failure
+    console.log(response);
   }
   else if (response.status === "BAD_PARAMS") {
     // handle bad parameters
+    console.log(response);
   }
 }
 

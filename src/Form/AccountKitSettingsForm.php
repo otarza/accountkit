@@ -5,6 +5,7 @@ namespace Drupal\accountkit\Form;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Routing\RequestContext;
 use Drupal\Component\Utility\SafeMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -14,19 +15,24 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 class AccountKitSettingsForm extends ConfigFormBase {
 
-  protected $requestContext;
+  /**
+   * The path validator to redirect the user.
+   *
+   * @var \Drupal\Core\Path\PathValidatorInterface
+   */
+  protected $pathValidator;
 
   /**
-   * Constructor.
+   * AccountKitSettingsForm constructor.
    *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The factory for configuration objects.
-   * @param \Drupal\Core\Routing\RequestContext $request_context
-   *   Holds information about the current request.
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
+   *   The config factory for config forms.
+   * @param \Drupal\Core\Path\PathValidatorInterface $pathValidator
+   *   The path validator to check the redirect path.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, RequestContext $request_context) {
-    $this->setConfigFactory($config_factory);
-    $this->requestContext = $request_context;
+  public function __construct(ConfigFactoryInterface $configFactory, PathValidatorInterface $pathValidator) {
+    parent::__construct($configFactory);
+    $this->pathValidator = $pathValidator;
   }
 
   /**
@@ -37,7 +43,7 @@ class AccountKitSettingsForm extends ConfigFormBase {
     return new static(
     // Load the services required to construct this class.
       $container->get('config.factory'),
-      $container->get('router.request_context')
+      $container->get('path.validator')
     );
   }
 
@@ -81,28 +87,18 @@ class AccountKitSettingsForm extends ConfigFormBase {
     $form['fb_settings']['app_secret'] = array(
       '#type' => 'textfield',
       '#required' => TRUE,
-      '#title' => $this->t('App Secret'),
+      '#title' => $this->t('Account Kit App Secret'),
       '#default_value' => $accountkit_config->get('app_secret'),
-      '#description' => $this->t('Copy the App Secret of your Facebook App here. This value can be found from your App Dashboard.'),
+      '#description' => $this->t('Copy the Account Kit App Secret of your Facebook App here. This value can be found under Products > Account Kit > Dashboard.'),
     );
 
     $form['fb_settings']['api_version'] = array(
       '#type' => 'textfield',
       '#required' => TRUE,
-      '#title' => $this->t('API Version'),
+      '#title' => $this->t('Account Kit API Version'),
       '#default_value' => $accountkit_config->get('api_version'),
-      '#description' => $this->t('Copy the API Version of your Facebook App here. This value can be found from your App Dashboard. More information on API versions can be found at <a href="@facebook-changelog">Facebook Platform Changelog</a>.', array('@facebook-changelog' => 'https://developers.facebook.com/docs/apps/changelog')),
+      '#description' => $this->t('Copy the Account Kit API Version of your Facebook App here. It may be different than the facebook graph api version.'),
     );
-
-
-    $form['fb_settings']['app_domains'] = array(
-      '#type' => 'textfield',
-      '#disabled' => TRUE,
-      '#title' => $this->t('Server Domains - Used for Web SDK'),
-      '#description' => $this->t('Copy this value to <em>Server Domains - Used for Web SDK</em> field of your Account Kit App settings.'),
-      '#default_value' => $this->requestContext->getHost(),
-    );
-
 
     $form['module_settings'] = array(
       '#type' => 'details',
@@ -114,23 +110,23 @@ class AccountKitSettingsForm extends ConfigFormBase {
     $form['module_settings']['redirect_url'] = array(
       '#type' => 'textfield',
       '#required' => TRUE,
-      '#title' => $this->t('Redirect URL - Used for Basic Web SDK'),
+      '#title' => $this->t('Redirect Path'),
       '#description' => $this->t('Drupal path where the user should be redirected after successful login. Use <em>&lt;front&gt;</em> to redirect user to your front page.'),
       '#default_value' => $accountkit_config->get('redirect_url'),
     );
 
-    $form['module_settings']['disable_phone_auth'] = array(
+    $form['module_settings']['enable_email_auth'] = array(
       '#type' => 'checkbox',
-      '#title' => $this->t('Disable phone authentication'),
-      '#description' => $this->t('Disabling authentication via Email on Account Kit.'),
-      '#default_value' => $accountkit_config->get('disable_phone_auth'),
+      '#title' => $this->t('Enable email authentication'),
+      '#description' => $this->t('Enable authentication via Email on Account Kit.'),
+      '#default_value' => $accountkit_config->get('enable_email_auth'),
     );
 
-    $form['module_settings']['disable_email_auth'] = array(
+    $form['module_settings']['enable_phone_auth'] = array(
       '#type' => 'checkbox',
-      '#title' => $this->t('Disable email authentication'),
-      '#description' => $this->t('Disabling authentication via Phone on Account Kit.'),
-      '#default_value' => $accountkit_config->get('disable_phone_auth'),
+      '#title' => $this->t('Enable phone authentication'),
+      '#description' => $this->t('Enable authentication via Phone on Account Kit.'),
+      '#default_value' => $accountkit_config->get('enable_phone_auth'),
     );
 
     return parent::buildForm($form, $form_state);
@@ -142,6 +138,9 @@ class AccountKitSettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     if (!preg_match('/^v[1-9]\.[0-9]{1,2}$/', $form_state->getValue('api_version'))) {
       $form_state->setErrorByName('api_version', $this->t('Invalid API version. The syntax for API version is for example <em>v2.8</em>'));
+    }
+    if (!$this->pathValidator->isValid($form_state->getValue('redirect_url'))) {
+      $form_state->setErrorByName('redirect_url', $this->t('The redirect url must be valid on the site.'));
     }
   }
 
@@ -155,8 +154,8 @@ class AccountKitSettingsForm extends ConfigFormBase {
       ->set('app_secret', $values['app_secret'])
       ->set('api_version', $values['api_version'])
       ->set('redirect_url', $values['redirect_url'])
-      ->set('disable_phone_auth', $values['disable_phone_auth'])
-      ->set('disable_email_auth', $values['disable_email_auth'])
+      ->set('enable_email_auth', $values['enable_email_auth'])
+      ->set('enable_phone_auth', $values['enable_phone_auth'])
       ->save();
 
     parent::submitForm($form, $form_state);
