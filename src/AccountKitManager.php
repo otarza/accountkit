@@ -6,6 +6,9 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\externalauth\Exception\ExternalAuthRegisterException;
 use Drupal\externalauth\ExternalAuthInterface;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\GuzzleException;
 
 /**
  * Contains all Account Kit related logic.
@@ -23,6 +26,11 @@ class AccountKitManager {
   private $externalAuth;
 
   /**
+   * @var \GuzzleHttp\ClientInterface
+   */
+  private $client;
+
+  /**
    * @var \Psr\Log\LoggerInterface
    */
   private $logger;
@@ -34,12 +42,20 @@ class AccountKitManager {
    *   The config factory to get the account kit config from.
    * @param ExternalAuthInterface $externalAuth
    *   The authentication service for external authentication methods.
+   * @param \GuzzleHttp\ClientInterface $client
+   *   The http client to make requests to facebook with.
    * @param LoggerChannelFactoryInterface $loggerChannelFactory
    *   The logger factory to get the logger for our module.
    */
-  public function __construct(ConfigFactoryInterface $configFactory, ExternalAuthInterface $externalAuth, LoggerChannelFactoryInterface $loggerChannelFactory) {
+  public function __construct(
+    ConfigFactoryInterface $configFactory,
+    ExternalAuthInterface $externalAuth,
+    ClientInterface $client,
+    LoggerChannelFactoryInterface $loggerChannelFactory
+  ) {
     $this->configFactory = $configFactory;
     $this->externalAuth = $externalAuth;
+    $this->client = $client;
     $this->logger = $loggerChannelFactory->get('accountkit');
   }
 
@@ -49,36 +65,36 @@ class AccountKitManager {
    * @param string $code
    *   The account kit code.
    *
-   * @return bool
-   *   Indicates success.
+   * @return \Drupal\user\UserInterface|null
+   *   The user or null if there was a failure.
    */
   public function userLoginFromCode($code) {
-
-    $data = $this->getUserInfo($code);
-
-    if (!empty($data['id'])) {
-      // The account kit id will be the username.
+    try {
+      $data = $this->getUserInfo($code);
       $user_name = $data['id'];
       $account_data = [];
       if (!empty($data['email']['address'])) {
         $account_data['mail'] = $data['email']['address'];
       }
 
-      try {
-        $this->externalAuth->loginRegister($user_name, 'accountkit', $account_data);
-      }
-      catch (ExternalAuthRegisterException $exception) {
-        $this->logger->error($exception->getMessage());
-
-        return FALSE;
-      }
-
-      return TRUE;
+      return $this->externalAuth->loginRegister($user_name, 'accountkit', $account_data);
     }
-    elseif (!empty($data['error'])) {
-      $this->logger->error($data['error']['type'] . ': ' . $data['error']['message']);
+    catch (AccountKitConnectionException $exception) {
+      $data = $exception->getData();
+      $error = "Accountkit error: " . $data['message']
+        . " type: " . $data['type']
+        . " code: " . $data['code']
+        . " fbtrace_id:" . $data['fbtrace_id'];
+      $this->logger->error($error);
     }
-    return FALSE;
+    catch (GuzzleException $exception) {
+      $this->logger->error('Connection error: ' . $exception->getMessage());
+    }
+    catch (ExternalAuthRegisterException $exception) {
+      $this->logger->error('Registration error: ' . $exception->getMessage());
+    }
+
+    return NULL;
   }
 
   /**
@@ -91,22 +107,15 @@ class AccountKitManager {
    *
    * @return array
    *   Array containing user info.
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   *   The connection exception.
    */
   protected function getUserInfo($code) {
     // This code is copied from the developer documentation of account kit.
-    $data = NULL;
     $access_token = $this->getAccessToken($code);
-    if (!empty($access_token)) {
-      // Get Account Kit information
-      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getConfig('api_version') . '/me?' .
-        'access_token=' . $access_token;
-      $data = $this->curlit($me_endpoint_url);
-    }
-    else {
-      $this->logger->error('The access token was empty.');
-    }
-
-    return $data;
+    $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getConfig('api_version') . '/me?access_token=' . $access_token;
+    return $this->curlit($me_endpoint_url);
   }
 
   /**
@@ -117,8 +126,11 @@ class AccountKitManager {
    * @param string $code
    *   The account kit code.
    *
-   * @return string|null
+   * @return string
    *   The access token.
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   *   The connection exception.
    */
   protected function getAccessToken($code) {
     $app_id = $this->getConfig('app_id');
@@ -132,15 +144,6 @@ class AccountKitManager {
       "&access_token=AA|$app_id|$secret";
 
     $data = $this->curlit($token_exchange_url);
-
-    if(!empty($data['error'])) {
-      $error = $data['error']['message']
-        . " type: ". $data['error']['type']
-        . " code: " . $data['error']['code']
-        . " fbtrace_id:" . $data['error']['fbtrace_id'];
-      $this->logger->error($error);
-    }
-
     return $data['access_token'];
   }
 
@@ -160,23 +163,28 @@ class AccountKitManager {
   /**
    * Make a curl request.
    *
-   * This code is copied from the developer documentation of account kit.
-   *
    * @param string $url
    *   The url to curl
    *
-   * @return mixed
+   * @return array
    *   The result
+   *
+   * @throws \GuzzleHttp\Exception\GuzzleException
+   *   The connection exception.
    */
-  private function curlit($url) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-    $data = json_decode(curl_exec($ch), TRUE);
-    curl_close($ch);
-    return $data;
+  protected function curlit($url) {
+    try {
+      $response = $this->client->request('get', $url);
+      return json_decode($response->getBody()->getContents(), TRUE);
+    }
+    catch (ClientException $exception) {
+      if ($exception->hasResponse()) {
+        $response = $exception->getResponse();
+        $data = json_decode($response->getBody()->getContents(), TRUE);
+        throw new AccountKitConnectionException($exception, $data['error']);
+      }
+      throw $exception;
+    }
   }
-
-
 
 }
