@@ -7,3 +7,4 @@
 3. Configure `/admin/config/people/accountkit`
 4. Login `/user/accountkit`
 
+Important notice: Do not require the app secret for server api calls in the accountkit configuration on facebook.

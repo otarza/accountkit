@@ -3,4 +3,5 @@ services:
     class: Drupal\accountkit\AccountKitManager
     arguments:
       - '@config.factory'
+      - '@externalauth.externalauth'
       - '@logger.factory'

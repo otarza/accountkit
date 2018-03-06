@@ -4,7 +4,8 @@ namespace Drupal\accountkit;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
-use Drupal\user\Entity\User;
+use Drupal\externalauth\Exception\ExternalAuthRegisterException;
+use Drupal\externalauth\ExternalAuthInterface;
 
 /**
  * Contains all Account Kit related logic.
@@ -17,6 +18,11 @@ class AccountKitManager {
   private $configFactory;
 
   /**
+   * @var \Drupal\externalauth\ExternalAuthInterface
+   */
+  private $externalAuth;
+
+  /**
    * @var \Psr\Log\LoggerInterface
    */
   private $logger;
@@ -26,14 +32,16 @@ class AccountKitManager {
    *
    * @param ConfigFactoryInterface $configFactory
    *   The config factory to get the account kit config from.
+   * @param ExternalAuthInterface $externalAuth
+   *   The authentication service for external authentication methods.
    * @param LoggerChannelFactoryInterface $loggerChannelFactory
    *   The logger factory to get the logger for our module.
    */
-  public function __construct(ConfigFactoryInterface $configFactory, LoggerChannelFactoryInterface $loggerChannelFactory) {
+  public function __construct(ConfigFactoryInterface $configFactory, ExternalAuthInterface $externalAuth, LoggerChannelFactoryInterface $loggerChannelFactory) {
     $this->configFactory = $configFactory;
+    $this->externalAuth = $externalAuth;
     $this->logger = $loggerChannelFactory->get('accountkit');
   }
-
 
   /**
    * Log a user in based on the account kit code, create it if necessary.
@@ -51,30 +59,54 @@ class AccountKitManager {
     if (!empty($data['id'])) {
       // The account kit id will be the username.
       $user_name = $data['id'];
-      $user = user_load_by_name($user_name);
-    }
-    if ($user) {
-      drupal_set_message("You are now logged in as " . $user->getDisplayName(), "status");
-    }
-    elseif ($user_name) {
-      $user = User::create();
-      $user->enforceIsNew();
-      $user->setUsername($user_name);
-      $user->activate();
-      if(!empty($data['email']['address'])){
-        $user->setEmail($user_name);
+      $account_data = [];
+      if (!empty($data['email']['address'])) {
+        $account_data['mail'] = $data['email']['address'];
       }
-      $user->save();
 
-      drupal_set_message("You are now logged in as " . $user->getDisplayName(), "status");
-    }
-    if ($user) {
-      user_login_finalize($user);
+      try {
+        $this->externalAuth->loginRegister($user_name, 'accountkit', $account_data);
+      }
+      catch (ExternalAuthRegisterException $exception) {
+        $this->logger->error($exception->getMessage());
+
+        return FALSE;
+      }
 
       return TRUE;
     }
-
+    elseif (!empty($data['error'])) {
+      $this->logger->error($data['error']['type'] . ': ' . $data['error']['message']);
+    }
     return FALSE;
+  }
+
+  /**
+   * Get user information like email or phone.
+   *
+   * This code is copied from the developer documentation of account kit.
+   *
+   * @param string $code
+   *   The account kit code.
+   *
+   * @return array
+   *   Array containing user info.
+   */
+  protected function getUserInfo($code) {
+    // This code is copied from the developer documentation of account kit.
+    $data = NULL;
+    $access_token = $this->getAccessToken($code);
+    if (!empty($access_token)) {
+      // Get Account Kit information
+      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getConfig('api_version') . '/me?' .
+        'access_token=' . $access_token;
+      $data = $this->curlit($me_endpoint_url);
+    }
+    else {
+      $this->logger->error('The access token was empty.');
+    }
+
+    return $data;
   }
 
   /**
@@ -110,34 +142,6 @@ class AccountKitManager {
     }
 
     return $data['access_token'];
-  }
-
-  /**
-   * Get user information like email or phone.
-   *
-   * This code is copied from the developer documentation of account kit.
-   *
-   * @param string $code
-   *   The account kit code.
-   *
-   * @return array
-   *   Array containing user info.
-   */
-  protected function getUserInfo($code) {
-    // This code is copied from the developer documentation of account kit.
-    $data = NULL;
-    $access_token = $this->getAccessToken($code);
-    if (!empty($access_token)) {
-      // Get Account Kit information
-      $me_endpoint_url = 'https://graph.accountkit.com/' . $this->getConfig('app_secret') . '/me?' .
-        'access_token=' . $access_token;
-      $data = $this->curlit($me_endpoint_url);
-    }
-    else {
-      $this->logger->error('The access token was empty.');
-    }
-
-    return $data;
   }
 
   /**

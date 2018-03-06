@@ -5,6 +5,7 @@ namespace Drupal\accountkit\Form;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Routing\RequestContext;
 use Drupal\Component\Utility\SafeMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -14,19 +15,24 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 class AccountKitSettingsForm extends ConfigFormBase {
 
-  protected $requestContext;
+  /**
+   * The path validator to redirect the user.
+   *
+   * @var \Drupal\Core\Path\PathValidatorInterface
+   */
+  protected $pathValidator;
 
   /**
-   * Constructor.
+   * AccountKitSettingsForm constructor.
    *
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
-   *   The factory for configuration objects.
-   * @param \Drupal\Core\Routing\RequestContext $request_context
-   *   Holds information about the current request.
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $configFactory
+   *   The config factory for config forms.
+   * @param \Drupal\Core\Path\PathValidatorInterface $pathValidator
+   *   The path validator to check the redirect path.
    */
-  public function __construct(ConfigFactoryInterface $config_factory, RequestContext $request_context) {
-    $this->setConfigFactory($config_factory);
-    $this->requestContext = $request_context;
+  public function __construct(ConfigFactoryInterface $configFactory, PathValidatorInterface $pathValidator) {
+    parent::__construct($configFactory);
+    $this->pathValidator = $pathValidator;
   }
 
   /**
@@ -37,7 +43,7 @@ class AccountKitSettingsForm extends ConfigFormBase {
     return new static(
     // Load the services required to construct this class.
       $container->get('config.factory'),
-      $container->get('router.request_context')
+      $container->get('path.validator')
     );
   }
 
@@ -94,16 +100,6 @@ class AccountKitSettingsForm extends ConfigFormBase {
       '#description' => $this->t('Copy the Account Kit API Version of your Facebook App here. It may be different than the facebook graph api version.'),
     );
 
-
-    $form['fb_settings']['app_domains'] = array(
-      '#type' => 'textfield',
-      '#disabled' => TRUE,
-      '#title' => $this->t('Server Domains - Used for Web SDK'),
-      '#description' => $this->t('Copy this value to <em>Server Domains - Used for Web SDK</em> field of your Account Kit App settings.'),
-      '#default_value' => $this->requestContext->getHost(),
-    );
-
-
     $form['module_settings'] = array(
       '#type' => 'details',
       '#title' => $this->t('Account Kit configurations'),
@@ -142,6 +138,9 @@ class AccountKitSettingsForm extends ConfigFormBase {
   public function validateForm(array &$form, FormStateInterface $form_state) {
     if (!preg_match('/^v[1-9]\.[0-9]{1,2}$/', $form_state->getValue('api_version'))) {
       $form_state->setErrorByName('api_version', $this->t('Invalid API version. The syntax for API version is for example <em>v2.8</em>'));
+    }
+    if (!$this->pathValidator->isValid($form_state->getValue('redirect_url'))) {
+      $form_state->setErrorByName('redirect_url', $this->t('The redirect url must be valid on the site.'));
     }
   }
 

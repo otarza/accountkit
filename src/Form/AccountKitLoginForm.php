@@ -4,34 +4,52 @@ namespace Drupal\accountkit\Form;
 
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Path\PathValidatorInterface;
 use Drupal\Core\Url;
-use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\accountkit\AccountKitManager;
 
 /**
- * Class EmailLoginForm.
+ * Class AccountKitLoginForm
+ *
+ * @package Drupal\accountkit\Form
  */
 class AccountKitLoginForm extends FormBase {
 
   /**
-   * Drupal\accountkit\AccountKitManager definition.
+   * Accountkit manager to perform the login.
    *
    * @var \Drupal\accountkit\AccountKitManager
    */
-  protected $accountkitAccountkitManager;
+  protected $accountkitManager;
+
   /**
-   * Constructs a new EmailLoginForm object.
+   * The path validator to redirect the user.
+   *
+   * @var \Drupal\Core\Path\PathValidatorInterface
+   */
+  protected $pathValidator;
+
+  /**
+   * AccountKitLoginForm constructor.
+   *
+   * @param \Drupal\accountkit\AccountKitManager $accountkitManager
+   *   The accountkit manager.
+   * @param \Drupal\Core\Path\PathValidatorInterface $pathValidator
+   *   The path validator to get the redirect url from.
    */
   public function __construct(
-    AccountKitManager $accountkit_accountkit_manager
+    AccountKitManager $accountkitManager,
+    PathValidatorInterface $pathValidator
   ) {
-    $this->accountkitAccountkitManager = $accountkit_accountkit_manager;
+    $this->accountkitManager = $accountkitManager;
+    $this->pathValidator = $pathValidator;
   }
 
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('accountkit.accountkit_manager')
+      $container->get('accountkit.accountkit_manager'),
+      $container->get('path.validator')
     );
   }
 
@@ -69,13 +87,6 @@ class AccountKitLoginForm extends FormBase {
         '#attributes' => ['id' => 'email-login-submit'],
       ];
     }
-
-    $csrf = $form_state->get('csrf');
-    if (!$csrf) {
-      $csrf = rand(0, 10);
-      $form_state->set('csrf', $csrf);
-    }
-
 
     if ($enable_phone) {
       $form['country_code'] = [
@@ -135,10 +146,18 @@ class AccountKitLoginForm extends FormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-
-    if ($this->accountkitAccountkitManager->userLoginFromCode($form_state->getValue('code'))){
-      $uri = $this->config('accountkit.settings')->get('redirect_url');
-      $form_state->setRedirectUrl(Url::fromUri($uri));
+    if ($this->accountkitManager->userLoginFromCode($form_state->getValue('code'))){
+      $url = $this->pathValidator->getUrlIfValid($this->config('accountkit.settings')->get('redirect_url'));
+      if ($url) {
+        $form_state->setRedirectUrl($url);
+      }
+      else {
+        $form_state->setRedirectUrl(Url::fromRoute('user.page'));
+      }
+    }
+    else {
+      $this->logger('accountkit')->error('Accountkit form submission but no login.');
+      $this->messenger()->addError($this->t('Something went wrong with the accountkit login.'));
     }
   }
 
